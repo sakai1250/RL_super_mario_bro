@@ -27,6 +27,8 @@ class ReplayBuffer:
 
     @staticmethod
     def _quantize(frame: np.ndarray) -> np.ndarray:
+        if frame.dtype == np.uint8:
+            return frame
         return np.rint(np.clip(frame, 0.0, 1.0) * 255.0).astype(np.uint8)
 
     def __len__(self) -> int:

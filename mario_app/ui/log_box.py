@@ -70,6 +70,7 @@ class LogBox(BoxPanel):
     READOUTS = (
         ("reward", "報酬"), ("best", "最高"), ("loss", "loss"), ("q", "Q値"),
         ("buffer", "バッファ"), ("ep_steps", "EP歩数"), ("action", "行動"),
+        ("sps", "step/s"),
     )
 
     def __init__(self) -> None:
@@ -111,6 +112,9 @@ class LogBox(BoxPanel):
             "buffer": "—" if buffer is None else (f"{buffer}/{capacity}" if capacity else str(buffer)),
             "ep_steps": fmt(stats.get("ep_steps"), ","),
             "action": str(stats.get("action", "—")),
+            "sps": (f"{int(stats.get('envs', 1) or 1)}x{stats.get('steps_per_sec', 0):.0f}/s"
+                    if int(stats.get("envs", 1) or 1) > 1
+                    else fmt(stats.get("fps"), ".0f") + "FPS"),
         }
         for key, text in values.items():
             self._lcds[key].set_text(text)

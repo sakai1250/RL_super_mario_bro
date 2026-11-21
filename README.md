@@ -63,7 +63,8 @@ DEVICE で `CUDA` を選ぶと GPU で学習・推論します（既定で CUDA 
 
 ```sh
 QT_QPA_PLATFORM=offscreen .venv/bin/python -m pytest -q
-QT_QPA_PLATFORM=offscreen .venv/bin/python scripts/train_smoke.py 2000 auto
+QT_QPA_PLATFORM=offscreen .venv/bin/python scripts/train_smoke.py 2000 auto 1
+QT_QPA_PLATFORM=offscreen .venv/bin/python scripts/train_smoke.py 2000 auto 8
 ```
 
 ### .app として起動（macOS）
@@ -86,6 +87,7 @@ open "Mario RL Player.app"
 | 学習キー | ON で DQN 学習、OFF で再生のみ。新規モデルは ON、既存モデルは OFF が既定。実行中も切り替えられる |
 | SPEED | 0.25× 〜 4×、MAX（待ちなし）。実行中に変更できる。1× は NES 実機と同じ 60 fps |
 | HYPER | ε・ε減衰・ε下限・γ・学習率・バッチ・学習間隔・同期間隔・burnin・バッファを実行中に変更できる（◀▶、または値をクリックして直接入力） |
+| 並列 | 同時に動かす環境数（既定 8、1〜16）。1 にすると従来どおり単一環境で動く。実行中は変更できない |
 | SAVE | `SAVE NOW` で今すぐ保存、`AUTO` で自動保存の間隔（ステップ数、OFF 可） |
 | Space / Return / Esc | 一時停止 / 開始 / 停止 |
 | ⌘S | 重みを保存 |
@@ -94,9 +96,11 @@ open "Mario RL Player.app"
 ### アプリ内学習
 
 - ノートブックの `Mario` クラスと同じ学習（ε-greedy、Double DQN 形式の TD ターゲット、SmoothL1、Adam）をアプリ内で動かします。
+- 既定では 8 個の環境を別プロセスで同時に動かし、集めた経験を 1 つのリプレイバッファに入れて 1 つのネットワークをまとめて更新します（並列数は MODEL の「並列」で変更、1 で従来の単一環境）。ゲーム画面は環境 0 を表示し、STEP・EP・報酬グラフ・最高報酬は全環境の合算です。
+- 環境プロセスは CPU で行動を選び、学習・推論のネットワーク更新はメイン側で CUDA（または選択したデバイス）を使います。
 - 保存は `models/` に書き出します。手動は `mario_<日時>_s<ステップ>.pth`、自動は実行ごとに 1 ファイル（`mario_<開始日時>_auto.pth`）を上書きします。横に同名の `.json`（ハイパラ・ステップ数・シードなど）が付きます。元のモデルファイルは上書きしません。
 - 形式は `MarioNet.state_dict()`（`online.*` / `target.*`）で、ノートブックと互換です。
-- 保存から再開するとリプレイバッファは空から始まり、burnin の間は学習しません。
+- 保存から再開するとリプレイバッファは空から始まり、burnin の間は学習しません。並列時もチェックポイントはメインプロセスが 1 ファイルに保存するため、形式は単一環境時と同じです。
 - リプレイバッファは uint8 で持ちます（1 万件で約 565 MB）。
 - 学習中に停止・終了すると、未保存の更新があれば確認が出ます。
 
@@ -105,6 +109,7 @@ open "Mario RL Player.app"
 - **前処理**: グレースケール → 84×84 → 直近 4 フレーム → 0–1 に正規化
 - **行動**: `SIMPLE_MOVEMENT` の 7 種類を 12 フレームずつ実行
 - **推論・学習**: `MarioNet`（3 層 CNN + 全結合）を CUDA / MPS / CPU で実行
+- **並列環境**: `multiprocessing`（spawn）で環境ごとに別プロセス。観測・行動・報酬をキューでメインプロセスへ送り、学習は 1 か所に集約
 - **描画**: `nes-py` の `render_mode="rgb_array"` で取得した 256×240 の画面を Qt でウィンドウの大きさに合わせて拡大
 - **報酬**: ノートブックの `CustomRewardAndDoneEnv` と同じ整形（前進 +10、後退 -4 など）
 
@@ -145,6 +150,7 @@ mario_app/
   agent.py        MarioNet とチェックポイント読み込み
   env.py          前処理ラッパー・カスタム報酬・環境生成
   game_worker.py  QThread 上で動くゲームループ（学習を含む）
+  parallel.py     並列学習用の環境プロセス（観測・行動・報酬の送信）
   paths.py        プロジェクト内のパス
   ui/             ファミコン調のメインウィンドウと部品
 assets/fonts/     DotGothic16（SIL OFL）と OFL.txt
@@ -156,7 +162,7 @@ scripts/
   build_app_bundle.sh  .app バンドル生成（macOS 専用）
   make_icon.py         アプリアイコン生成
   ui_snapshot.py       UI をオフスクリーンで PNG に保存
-  train_smoke.py       CUDA / MPS / CPU の学習スモーク
+  train_smoke.py       CUDA / MPS / CPU・並列数の学習スモーク
 sakai_rl_mario.ipynb   元の学習ノートブック（Colab / Linux 想定）
 mario_param_new_best.pth  学習済みモデル（3-4）
 mario_param_new.pth       学習途中のモデル

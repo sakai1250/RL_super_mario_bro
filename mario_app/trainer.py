@@ -88,6 +88,12 @@ class DQNTrainer:
         self.epsilon = float(clamp_hp("epsilon", value))
 
     # ------------------------------------------------------------------- act
+    def note_transition(self, learning: bool) -> None:
+        """1 行動ぶん進める（並列環境では行動を集約する側が呼ぶ）。"""
+        if learning:
+            self.epsilon = max(self._hp.epsilon_min, self.epsilon * self._hp.epsilon_decay)
+        self.curr_step += 1
+
     @torch.no_grad()
     def act(self, state: np.ndarray, learning: bool) -> tuple[int, np.ndarray | None]:
         if self._rng.random() < self.epsilon:
@@ -97,9 +103,7 @@ class DQNTrainer:
             q_values = self.net(x, "online")[0].cpu().numpy().astype(np.float32)
             action = int(np.argmax(q_values))
 
-        if learning:
-            self.epsilon = max(self._hp.epsilon_min, self.epsilon * self._hp.epsilon_decay)
-        self.curr_step += 1
+        self.note_transition(learning)
         return action, q_values
 
     # ----------------------------------------------------------------- learn

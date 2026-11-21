@@ -20,6 +20,16 @@ from nes_py.wrappers import JoypadSpace
 
 STAGES: list[str] = [f"{world}-{stage}" for world in range(1, 9) for stage in range(1, 5)]
 
+ACTION_LABELS = [
+    "NOOP",
+    "right",
+    "right + A",
+    "right + B",
+    "right + A + B",
+    "A",
+    "left",
+]
+
 # エージェント 1 ステップあたりに進める NES フレーム数（ノートブックと同じ 12）
 ACTION_REPEAT = 12
 

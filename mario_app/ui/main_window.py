@@ -113,7 +113,7 @@ class MainWindow(QMainWindow):
         left.addWidget(self.bezel, 1)
         readout = QHBoxLayout()
         self.lcd_ep, self.lcd_step = Lcd("EP ---", chars=6), Lcd("STEP ------", chars=11)
-        self.lcd_x, self.lcd_fps = Lcd("X ----", chars=6), Lcd("--FPS", chars=5)
+        self.lcd_x, self.lcd_fps = Lcd("X ----", chars=6), Lcd("--FPS", chars=6)
         for lcd in (self.lcd_ep, self.lcd_step, self.lcd_x, self.lcd_fps):
             readout.addWidget(lcd)
         left.addLayout(readout)
@@ -218,6 +218,7 @@ class MainWindow(QMainWindow):
             device=self.model_box.device(),
             autosave_every=self.save_box.autosave_every(),
             models_dir=str(self._models_dir),
+            n_envs=self.model_box.n_envs(),
         )
         self._worker = GameWorker(config)
         self._thread = QThread(self)
@@ -317,7 +318,11 @@ class MainWindow(QMainWindow):
         self.lcd_ep.set_text(f"EP {s.get('episode', 0):03d}")
         self.lcd_step.set_text(f"STEP {s.get('agent_step', 0):06d}")
         self.lcd_x.set_text(f"X {s.get('x_pos', 0):.0f}")
-        self.lcd_fps.set_text(f"{s.get('fps', 0):.0f}FPS")
+        envs = int(s.get("envs", 1) or 1)
+        if envs > 1:
+            self.lcd_fps.set_text(f"{s.get('steps_per_sec', 0):.0f}/s")
+        else:
+            self.lcd_fps.set_text(f"{s.get('fps', 0):.0f}FPS")
         self.hyper_box.set_live_epsilon(s.get("epsilon", 0.0))
         self.save_box.set_last_saved(s.get("last_saved") or "")
         self.save_box.set_unsaved(s.get("unsaved_steps", 0))

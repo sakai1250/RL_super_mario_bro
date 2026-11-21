@@ -19,6 +19,8 @@ from .widgets import BoxPanel, Key, Lcd
 NEW_MODEL_LABEL = "新規（ランダム初期化）"
 AUTOSAVE_MAX = 100_000
 AUTOSAVE_STEP = 1_000
+PARALLEL_CHOICES = (1, 2, 4, 8, 12, 16)
+DEFAULT_PARALLEL = 8
 
 
 class SpeedBox(BoxPanel):
@@ -99,11 +101,18 @@ class ModelBox(BoxPanel):
         row2.addWidget(self.auto_key)
         self.body.addLayout(row2)
 
+        self.parallel_combo = QComboBox()
+        for count in PARALLEL_CHOICES:
+            self.parallel_combo.addItem(f"並列 {count}", count)
+        self.parallel_combo.setCurrentIndex(PARALLEL_CHOICES.index(DEFAULT_PARALLEL))
+        self.body.addWidget(self.parallel_combo)
+
         self.refresh_models()
 
     def inputs(self) -> list[QWidget]:
         return [self.model_combo, self.refresh_key, self.open_key,
-                self.stage_combo, self.device_combo, self.auto_key]
+                self.stage_combo, self.device_combo, self.auto_key,
+                self.parallel_combo]
 
     def set_locked(self, locked: bool) -> None:
         for widget in self.inputs():
@@ -132,6 +141,14 @@ class ModelBox(BoxPanel):
 
     def auto_restart(self) -> bool:
         return self.auto_key.isChecked()
+
+    def n_envs(self) -> int:
+        return int(self.parallel_combo.currentData() or 1)
+
+    def set_n_envs(self, count: int) -> None:
+        index = self.parallel_combo.findData(count)
+        if index >= 0:
+            self.parallel_combo.setCurrentIndex(index)
 
     # ------------------------------------------------------------------ models
     def refresh_models(self) -> None:
