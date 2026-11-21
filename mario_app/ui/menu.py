@@ -12,7 +12,7 @@ def show_about(win) -> None:
         "Mario RL Player",
         "<h3>Mario RL Player</h3>"
         "<p>DQN で Super Mario Bros. を学習・再生するアプリです。</p>"
-        "<p>環境: gym-super-mario-bros / nes-py<br>学習・推論: PyTorch (MPS / CPU)</p>",
+        "<p>環境: gym-super-mario-bros / nes-py<br>学習・推論: PyTorch (CUDA / MPS / CPU)</p>",
     )
 
 

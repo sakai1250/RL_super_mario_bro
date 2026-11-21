@@ -40,7 +40,7 @@ def test_modelbox_locked_disables_inputs(qapp, tmp_path):
 def test_modelbox_defaults_and_setters(qapp, tmp_path):
     box = ModelBox(roots=[tmp_path])
     assert box.stage() == "3-4" and box.auto_restart() is True
-    assert box.device() in {"auto", "mps", "cpu"}
+    assert box.device() in {"auto", "cuda", "mps", "cpu"}
     box.set_stage("1-1")
     box.set_device("cpu")
     assert box.stage() == "1-1" and box.device() == "cpu"

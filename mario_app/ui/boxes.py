@@ -87,6 +87,8 @@ class ModelBox(BoxPanel):
             self.stage_combo.addItem(f"WORLD {stage}", stage)
         self.stage_combo.setCurrentIndex(STAGES.index("3-4"))
         self.device_combo = QComboBox()
+        if torch.cuda.is_available():
+            self.device_combo.addItem("CUDA", "cuda")
         if torch.backends.mps.is_available():
             self.device_combo.addItem("MPS", "mps")
         self.device_combo.addItem("CPU", "cpu")

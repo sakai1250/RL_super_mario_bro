@@ -129,7 +129,13 @@ def test_set_epsilon_clamps():
 
 
 def test_resolve_device_falls_back_to_cpu():
-    assert resolve_device("mps", mps_available=False).type == "cpu"
-    assert resolve_device("auto", mps_available=False).type == "cpu"
-    assert resolve_device("auto", mps_available=True).type == "mps"
-    assert resolve_device("cpu", mps_available=True).type == "cpu"
+    assert resolve_device("mps", mps_available=False, cuda_available=False).type == "cpu"
+    assert resolve_device("auto", mps_available=False, cuda_available=False).type == "cpu"
+    assert resolve_device("auto", mps_available=True, cuda_available=False).type == "mps"
+    assert resolve_device("cpu", mps_available=True, cuda_available=True).type == "cpu"
+
+
+def test_resolve_device_prefers_cuda_for_auto():
+    assert resolve_device("auto", mps_available=True, cuda_available=True).type == "cuda"
+    assert resolve_device("cuda", cuda_available=True).type == "cuda"
+    assert resolve_device("cuda", cuda_available=False).type == "cpu"

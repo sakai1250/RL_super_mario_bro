@@ -21,12 +21,24 @@ def seed_everything(seed: int) -> None:
     torch.manual_seed(seed)
 
 
-def resolve_device(requested: str, mps_available: bool | None = None) -> torch.device:
-    """``auto`` / ``mps`` は MPS が使えれば MPS、無ければ CPU。"""
+def resolve_device(
+    requested: str,
+    mps_available: bool | None = None,
+    cuda_available: bool | None = None,
+) -> torch.device:
+    """``auto`` は CUDA → MPS → CPU の順で使えるものを選ぶ。"""
     if requested == "cpu":
         return torch.device("cpu")
+    if cuda_available is None:
+        cuda_available = torch.cuda.is_available()
+    if requested == "cuda":
+        return torch.device("cuda" if cuda_available else "cpu")
     if mps_available is None:
         mps_available = torch.backends.mps.is_available()
+    if requested == "mps":
+        return torch.device("mps" if mps_available else "cpu")
+    if cuda_available:
+        return torch.device("cuda")
     return torch.device("mps" if mps_available else "cpu")
 
 

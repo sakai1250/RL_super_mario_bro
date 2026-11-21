@@ -21,6 +21,7 @@ def main() -> int:
 
     from mario_app import __version__
     from mario_app.ui import MainWindow
+    from mario_app.ui.style import FALLBACK_FAMILY
 
     app = QApplication(sys.argv)
     app.setApplicationName("Mario RL Player")
@@ -28,9 +29,9 @@ def main() -> int:
     app.setOrganizationName("sakai1250")
     app.setApplicationVersion(__version__)
     app.setStyle("Fusion")
-    app.setFont(QFont("Hiragino Sans", 13))
+    app.setFont(QFont(FALLBACK_FAMILY, 13))
     try:
-        # macOS のタイトルバー / メニューもダーク寄りにする（Qt 6.5+）
+        # タイトルバー / メニューもダーク寄りにする（Qt 6.5+）
         app.styleHints().setColorScheme(Qt.ColorScheme.Dark)
     except AttributeError:
         pass
