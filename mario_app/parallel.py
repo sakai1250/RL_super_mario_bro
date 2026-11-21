@@ -16,7 +16,7 @@ import torch
 
 from .agent import MarioNet
 from .env import ACTION_LABELS, ACTION_REPEAT, RewardShaper, grab_screen, make_env
-from .pacing import DisplayThrottle, episode_pause, frame_period
+from .pacing import SPEED_MAX, DisplayThrottle, episode_pause, frame_period
 from .trainer import seed_everything
 
 
@@ -71,6 +71,19 @@ def actor_main(
 
         state, info = env.reset(seed=seed)
         shaper = RewardShaper()
+        frame_throttle = DisplayThrottle(max_fps=10.0)
+
+        def send_frame() -> None:
+            """画面フレームは落としてよいので、キューが一杯なら捨てる。"""
+            f = grab_screen(env)
+            small = f.reshape(120, 2, 128, 2, 3).mean(axis=(1, 3)).astype("uint8")
+            try:
+                if actor_id == 0:
+                    result_q.put_nowait(("frame", small))
+                else:
+                    result_q.put_nowait(("frame2", actor_id, small))
+            except queue.Full:
+                pass
         frame_count = 0
         ep_reward = 0.0
         ep_steps = 0
@@ -82,8 +95,7 @@ def actor_main(
         max_q: float | None = None
         next_frame_time = time.perf_counter()
 
-        if actor_id == 0:
-            send(("frame", grab_screen(env)))
+        send_frame()
 
         while not stop_event.is_set():
             while pause_event.is_set() and not stop_event.is_set():
@@ -129,8 +141,8 @@ def actor_main(
                 pending = 0
 
             current_speed = float(speed.value)
-            if actor_id == 0 and throttle.should_emit(current_speed, frame_count):
-                send(("frame", grab_screen(env)))
+            if frame_throttle.should_emit(SPEED_MAX, frame_count):
+                send_frame()
 
             if pending == 0:
                 shaped = shaper.shape(repeat_reward, info)

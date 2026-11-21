@@ -67,6 +67,8 @@ class GameWorker(QObject):
         self._frame_lock = Lock()
         self._latest_frame = None
         self._frame_seq = 0
+        self._latest_frames: dict[int, object] = {}
+        self._frames_seq = 0
         self._throttle = DisplayThrottle()
 
     # ------------------------------------------------------------- controls
@@ -120,10 +122,17 @@ class GameWorker(QObject):
         with self._frame_lock:
             return self._frame_seq, self._latest_frame
 
-    def _store_frame(self, frame) -> None:
+    def _store_frame(self, frame, actor_id: int = 0) -> None:
         with self._frame_lock:
             self._latest_frame = frame
             self._frame_seq += 1
+            self._latest_frames[actor_id] = frame
+            self._frames_seq += 1
+
+    def latest_frames(self):
+        """全環境の最新フレームを {actor_id: ndarray} で返す。"""
+        with self._frame_lock:
+            return self._frames_seq, dict(self._latest_frames)
 
     # ------------------------------------------------------------- parallel run
     def _run_parallel(self) -> None:
@@ -324,7 +333,9 @@ class GameWorker(QObject):
                         ended_unattended = True
                         controls.request_stop()
                 elif kind == "frame":
-                    self._store_frame(message[1])
+                    self._store_frame(message[1], 0)
+                elif kind == "frame2":
+                    self._store_frame(message[2], message[1])
                 elif kind == "error":
                     raise RuntimeError(message[2])
 

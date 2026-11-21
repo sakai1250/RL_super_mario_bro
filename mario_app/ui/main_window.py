@@ -54,6 +54,7 @@ class MainWindow(QMainWindow):
         self._thread: QThread | None = None
         self.last_stats: dict | None = None
         self._last_frame_seq = -1
+        self._last_frames_seq = -1
 
         self._stats_timer = QTimer(self)
         self._stats_timer.setInterval(120)
@@ -302,12 +303,17 @@ class MainWindow(QMainWindow):
     def _pull_frame(self) -> None:
         if self._worker is None:
             return
+        seq, frames = self._worker.latest_frames()
+        if len(frames) > 1:
+            if seq != self._last_frames_seq:
+                self._last_frames_seq = seq
+                self.game_view.set_frames(frames)
+            return
         seq, frame = self._worker.latest_frame()
         if frame is not None and seq != self._last_frame_seq:
             self._last_frame_seq = seq
             self.game_view.set_frame(frame)
 
-    @Slot(object)
     def _on_stats(self, stats: dict) -> None:
         self.last_stats = stats
 

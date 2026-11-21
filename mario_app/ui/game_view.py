@@ -21,6 +21,33 @@ class GameView(QWidget):
         self._source: QPixmap | None = None
         self._scaled: QPixmap | None = None
         self._stage = "3-4"
+        self._grid: dict[int, QPixmap] = {}
+
+    def set_frames(self, frames: dict) -> None:
+        """全環境のフレームをグリッド表示用に受け取る。"""
+        grid: dict[int, QPixmap] = {}
+        for aid, frame in frames.items():
+            if frame is None:
+                continue
+            h, w = frame.shape[:2]
+            image = QImage(frame.data, w, h, 3 * w, QImage.Format_RGB888).copy()
+            grid[int(aid)] = QPixmap.fromImage(image)
+        self._grid = grid
+        self.update()
+
+    def clear_frames(self) -> None:
+        self._grid = {}
+        self.update()
+
+    @staticmethod
+    def _grid_cols(n: int) -> int:
+        if n <= 1:
+            return 1
+        if n <= 4:
+            return 2
+        if n <= 6:
+            return 3
+        return 4
 
     def set_frame(self, frame: np.ndarray) -> None:
         if frame is None:
@@ -38,10 +65,11 @@ class GameView(QWidget):
     def set_idle(self) -> None:
         self._source = None
         self._scaled = None
+        self._grid = {}
         self.update()
 
     def has_frame(self) -> bool:
-        return self._source is not None
+        return self._source is not None or bool(self._grid)
 
     def _target_size(self) -> QSize:
         if self._source is None:
@@ -71,7 +99,9 @@ class GameView(QWidget):
     def paintEvent(self, event) -> None:
         p = QPainter(self)
         p.fillRect(self.rect(), QColor("#16110F"))
-        if self._scaled is None:
+        if self._grid:
+            self._paint_grid(p)
+        elif self._scaled is None:
             self._paint_placeholder(p)
         else:
             x = (self.width() - self._scaled.width()) // 2
@@ -79,6 +109,25 @@ class GameView(QWidget):
             p.drawPixmap(x, y, self._scaled)
             self._paint_chip(p, f"WORLD {self._stage}", x + 8, y + 8)
         p.end()
+
+    def _paint_grid(self, p: QPainter) -> None:
+        aids = sorted(self._grid)
+        n = len(aids)
+        cols = self._grid_cols(n)
+        rows = -(-n // cols)
+        gap = 6
+        cw = max(1, (self.width() - gap * (cols + 1)) // cols)
+        ch = max(1, (self.height() - gap * (rows + 1)) // rows)
+        for idx, aid in enumerate(aids):
+            pix = self._grid[aid]
+            cell_x = gap + (idx % cols) * (cw + gap)
+            cell_y = gap + (idx // cols) * (ch + gap)
+            target = pix.size().scaled(cw, ch, Qt.KeepAspectRatio)
+            x = cell_x + (cw - target.width()) // 2
+            y = cell_y + (ch - target.height()) // 2
+            scaled = pix.scaled(target, Qt.IgnoreAspectRatio, Qt.FastTransformation)
+            p.drawPixmap(x, y, scaled)
+            self._paint_chip(p, f"ENV {aid + 1}", x + 4, y + 4)
 
     def _paint_placeholder(self, p: QPainter) -> None:
         p.setFont(pixel_font(24))
