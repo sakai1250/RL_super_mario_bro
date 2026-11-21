@@ -2,6 +2,11 @@
 # 依存関係を同梱した軽量 .app バンドルを作る（PyInstaller は使わない）
 set -euo pipefail
 
+if [ "$(uname)" != "Darwin" ]; then
+  echo "このスクリプトは macOS 専用です。" >&2
+  exit 1
+fi
+
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 APP="$ROOT/Mario RL Player.app"
 PY="$ROOT/.venv/bin/python"

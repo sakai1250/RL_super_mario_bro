@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""MPS での学習スモーク: 数千ステップ回して速度・loss・保存の読み直しを確認する。
+"""学習スモーク: 数千ステップ回して速度・loss・保存の読み直しを確認する。
 
     .venv/bin/python scripts/train_smoke.py [STEPS] [DEVICE]
 """
@@ -26,7 +26,7 @@ from mario_app.pacing import SPEED_MAX  # noqa: E402
 
 def main() -> int:
     steps = int(sys.argv[1]) if len(sys.argv) > 1 else 3000
-    device = sys.argv[2] if len(sys.argv) > 2 else "mps"
+    device = sys.argv[2] if len(sys.argv) > 2 else "auto"
     _app = QCoreApplication([])
     out = Path(tempfile.mkdtemp(prefix="train_smoke_"))
     worker = GameWorker(RunConfig(
