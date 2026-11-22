@@ -109,13 +109,63 @@ def train_stage(stage: str, group: int) -> dict:
     _app = QCoreApplication.instance() or QCoreApplication([])
     stage_dir = RESULTS / stage
     stage_dir.mkdir(parents=True, exist_ok=True)
+
+    # 既存の自動保存があれば、重み・ステップ・ε を引き継いで再開する
+    resume_step = 0
+    model_path = None
+    hp = Hyperparams()
+    cands = sorted(stage_dir.glob("*.pth"), key=lambda pth: pth.stat().st_mtime)
+    if cands:
+        ckpt_path = cands[-1]
+        try:
+            meta = json.loads(ckpt_path.with_suffix(".json").read_text(encoding="utf-8"))
+            resume_step = int(meta.get("agent_step", 0))
+            hp = Hyperparams(epsilon=float(meta.get("epsilon", hp.epsilon)))
+            model_path = str(ckpt_path)
+            log(f"{stage}: resume from {ckpt_path.name} step {resume_step} eps {hp.epsilon:.4f}")
+        except Exception as exc:  # メタが読めなければ新規開始
+            log(f"{stage}: resume failed ({exc}); starting fresh")
+            resume_step = 0
+            model_path = None
+            hp = Hyperparams()
+
     worker = GameWorker(RunConfig(
-        model_path=None, stage=stage, hp=Hyperparams(), learning=True,
+        model_path=model_path, stage=stage, hp=hp, learning=True,
         speed=SPEED_MAX, device="cuda", autosave_every=AUTOSAVE_EVERY,
         models_dir=str(stage_dir), n_envs=N_ENVS, seed=15 + group))
 
-    state = {"cleared": False, "steps": 0, "best_reward": None, "saves": [], "failed": None}
+    state = {"cleared": False, "steps": resume_step, "episodes": 0,
+             "best_reward": None, "saves": [], "failed": None}
     last_bucket = {"v": -1}
+
+    # ライブ表示用に、全環境の最新フレームを定期的にファイルへ書き出す
+    import threading
+
+    live_stop = threading.Event()
+
+    def live_tap() -> None:
+        import numpy as np
+
+        live_dir = RESULTS / "live"
+        live_dir.mkdir(parents=True, exist_ok=True)
+        while not live_stop.is_set():
+            try:
+                _seq, frames = worker.latest_frames()
+                if frames:
+                    tmp = live_dir / f"group{group}.tmp.npz"
+                    np.savez(tmp, **{str(k): v for k, v in frames.items()})
+                    os.replace(tmp, live_dir / f"group{group}.npz")
+                    meta_out = {"stage": stage, "group": group,
+                                "steps": state.get("steps", 0),
+                                "episodes": state.get("episodes", 0),
+                                "updated": time.time()}
+                    (live_dir / f"group{group}.json").write_text(
+                        json.dumps(meta_out), encoding="utf-8")
+            except Exception:
+                pass
+            live_stop.wait(0.5)
+
+    threading.Thread(target=live_tap, daemon=True).start()
 
     def on_episode(e):
         if e.get("flag"):
@@ -125,14 +175,16 @@ def train_stage(stage: str, group: int) -> dict:
             worker.request_stop()
 
     def on_stats(s):
-        state["steps"] = s["agent_step"]
+        total = resume_step + s["agent_step"]
+        state["steps"] = total
+        state["episodes"] = s["episode"]
         state["best_reward"] = s.get("best_reward")
-        bucket = s["agent_step"] // 100_000
+        bucket = total // 100_000
         if bucket != last_bucket["v"]:
             last_bucket["v"] = bucket
-            log(f"{stage}: step {s['agent_step']} episodes {s['episode']} "
+            log(f"{stage}: step {total} episodes {s['episode']} "
                 f"best_reward {s.get('best_reward')} loss {s.get('loss')}")
-        if s["agent_step"] >= BUDGET and not state["cleared"]:
+        if total >= BUDGET and not state["cleared"]:
             log(f"{stage}: budget reached ({BUDGET})")
             worker.request_save()
             worker.request_stop()
@@ -142,6 +194,7 @@ def train_stage(stage: str, group: int) -> dict:
     worker.saved.connect(lambda sv: state["saves"].append(sv["path"]))
     worker.failed.connect(lambda msg: state.update(failed=msg))
     worker.run()
+    live_stop.set()
     if state["failed"]:
         raise RuntimeError(state["failed"])
 
