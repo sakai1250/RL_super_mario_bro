@@ -11,6 +11,7 @@ group<g>.json の進捗を読み、2 系統分を 1 ウィンドウに並べて�
 from __future__ import annotations
 
 import json
+import re
 import sys
 import time
 from pathlib import Path
@@ -22,11 +23,31 @@ LIVE = ROOT / "results" / "full_run" / "live"
 GROUPS = ((0, "ワールド 1-4"), (1, "ワールド 5-8"))
 
 
+
+PROGRESS = ROOT / "results" / "full_run" / "progress.log"
+_step_re = re.compile(r"\] (\d+-\d+): step (\d+) episodes \d+ best_reward ([\d.]+)")
+
+
+def reward_history(stage: str) -> list[float]:
+    """progress.log から、そのステージの最高報酬の推移を取り出す。"""
+    values: list[float] = []
+    try:
+        text = PROGRESS.read_text(encoding="utf-8", errors="replace")
+    except Exception:
+        return values
+    for m in _step_re.finditer(text):
+        if m.group(1) == stage:
+            values.append(float(m.group(3)))
+    return values
+
+
 def main() -> int:
     import numpy as np
     from PySide6.QtCore import QTimer, Qt
     from PySide6.QtGui import QColor, QFont, QImage, QPainter, QPixmap
     from PySide6.QtWidgets import QApplication, QLabel, QVBoxLayout, QWidget
+
+    from mario_app.ui.log_box import RewardChart
 
     class GroupGrid(QWidget):
         """1 系統分の全環境フレームを格子状に描く。"""
@@ -88,6 +109,8 @@ def main() -> int:
 
     headers: dict[int, QLabel] = {}
     grids: dict[int, GroupGrid] = {}
+    charts: dict[int, RewardChart] = {}
+    chart_heads: dict[int, QLabel] = {}
     for group, title in GROUPS:
         head = QLabel(f"{title} — 接続待ち")
         head.setFont(QFont("Sans", 15, QFont.Bold))
@@ -95,12 +118,21 @@ def main() -> int:
         lay.addWidget(head)
         grid = GroupGrid()
         lay.addWidget(grid, 1)
+        chart_head = QLabel("報酬の記録（最高記録の推移）")
+        chart_head.setFont(QFont("Sans", 12, QFont.Bold))
+        chart_head.setStyleSheet("color:#F2E7CE;")
+        lay.addWidget(chart_head)
+        chart = RewardChart()
+        lay.addWidget(chart)
         headers[group] = head
         grids[group] = grid
+        charts[group] = chart
+        chart_heads[group] = chart_head
     win.setStyleSheet("background:#241B16;")
     win.show()
 
     mtimes: dict[int, float] = {}
+    chart_keys: dict[int, tuple] = {}
 
     def refresh() -> None:
         for group, title in GROUPS:
@@ -117,6 +149,25 @@ def main() -> int:
                         f"episode {int(meta.get('episodes', 0)):,} / {state}")
                 except Exception:
                     pass
+            stage_now = None
+            if meta_f.exists():
+                try:
+                    stage_now = json.loads(meta_f.read_text(encoding="utf-8")).get("stage")
+                except Exception:
+                    stage_now = None
+            if stage_now:
+                try:
+                    pmt = PROGRESS.stat().st_mtime
+                except Exception:
+                    pmt = 0.0
+                key = (stage_now, pmt)
+                if chart_keys.get(group) != key:
+                    chart_keys[group] = key
+                    values = reward_history(stage_now)
+                    if values:
+                        charts[group].set_values(values)
+                        chart_heads[group].setText(
+                            f"報酬の記録（最高記録の推移） 最新 {values[-1]:.0f} / 最高 {max(values):.0f}")
             if npz.exists():
                 mt = npz.stat().st_mtime
                 if mt != mtimes.get(group):
