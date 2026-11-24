@@ -49,6 +49,7 @@ def resume_step(stage: str) -> int:
 def main() -> int:
     stage = sys.argv[1]
     group = int(sys.argv[2])
+    max_rounds = int(sys.argv[3]) if len(sys.argv) > 3 else 0
     round_no = 0
     while True:
         round_no += 1
@@ -59,6 +60,9 @@ def main() -> int:
             tas.log(f"extra {stage}: CLEARED in round {round_no}")
             return 0
         tas.log(f"extra {stage}: round {round_no} finished without clear; continuing")
+        if max_rounds and round_no >= max_rounds:
+            tas.log(f"extra {stage}: reached max rounds {max_rounds} without clear; stopping for now")
+            return 1
 
 
 if __name__ == "__main__":
